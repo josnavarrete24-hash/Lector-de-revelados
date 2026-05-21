@@ -23,7 +23,7 @@
             <!-- Columna API Key -->
             <div class="bg-white p-5 rounded-xl shadow-xs border border-slate-200">
                 <label class="block text-sm font-semibold text-slate-700 mb-2">1. Configuración de API</label>
-                <input type="password" id="apiKey" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Introduce tu Gemini API Key">
+                <input type="password" id="apiKey" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Introduce tu API Key de Gemini">
                 <p class="text-xs text-slate-400 mt-2">Tu key se maneja de forma local y segura en el cliente.</p>
             </div>
 
@@ -31,7 +31,7 @@
             <div class="bg-white p-5 rounded-xl shadow-xs border border-slate-200 md:col-span-2">
                 <label class="block text-sm font-semibold text-slate-700 mb-2">2. Carga de Imágenes (Soporta múltiples fotos)</label>
                 <div class="flex gap-4 items-center">
-                    <input type="file" id="fileInput" multiple accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                    <input type="file" id="fileInput" multiple accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                     <button id="btnProcesar" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg text-sm transition-colors disabled:opacity-50" disabled>
                         Procesar con IA
                     </button>
@@ -137,11 +137,11 @@
                     agregarFilaTabla(datosEstructurados);
                     log(`Archivo ${files[i].name} procesado con éxito.`, 'success');
                 } catch (error) {
-                    log(`Error procesando ${files[i].name}: \${error.message}`, 'error');
+                    log(`Error procesando ${files[i].name}: ${error.message}`, 'error');
                 }
             }
 
-            contadorProgreso.innerText = `\${files.length}/\${files.length} Finalizado`;
+            contadorProgreso.innerText = `${files.length}/${files.length} Finalizado`;
             contadorProgreso.className = "text-xs bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full font-medium";
             btnProcesar.disabled = false;
             log('Procesamiento de lote completo.', 'success');
@@ -174,7 +174,7 @@
             }
             Si algún dato no es visible o está vacío, pon una cadena de texto vacía. Sé exacto con la transcripción.`;
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -206,15 +206,15 @@
             const tr = document.createElement('tr');
             tr.className = "hover:bg-slate-50 transition-colors";
             tr.innerHTML = `
-                <td class="px-4 py-3 font-medium text-slate-900">\${data.no_sobre || ''}</td>
-                <td class="px-4 py-3 font-mono text-blue-600">\${data.no_orden || ''}</td>
-                <td class="px-4 py-3">\${data.cliente || ''}</td>
-                <td class="px-4 py-3">\${data.telefono || ''}</td>
-                <td class="px-4 py-3 text-xs bg-slate-100 text-center font-bold rounded-sm">\${data.codigo_mini || ''}</td>
-                <td class="px-4 py-3">\${data.tienda || ''}</td>
-                <td class="px-4 py-3">\${data.formatos || ''}</td>
-                <td class="px-4 py-3">\${data.servicios || ''}</td>
-                <td class="px-4 py-3 italic">\${data.observaciones || ''}</td>
+                <td class="px-4 py-3 font-medium text-slate-900">${data.no_sobre || ''}</td>
+                <td class="px-4 py-3 font-mono text-blue-600">${data.no_orden || ''}</td>
+                <td class="px-4 py-3">${data.cliente || ''}</td>
+                <td class="px-4 py-3">${data.telefono || ''}</td>
+                <td class="px-4 py-3 text-xs bg-slate-100 text-center font-bold rounded-sm">${data.codigo_mini || ''}</td>
+                <td class="px-4 py-3">${data.tienda || ''}</td>
+                <td class="px-4 py-3">${data.formatos || ''}</td>
+                <td class="px-4 py-3">${data.servicios || ''}</td>
+                <td class="px-4 py-3 italic">${data.observaciones || ''}</td>
             `;
             tbodyDatos.appendChild(tr);
         }
@@ -239,7 +239,7 @@
             const libro = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(libro, hoja, "Datos Sobres");
 
-            XLSX.writeFile(libro, \`Sobres_Procesados_\${new Date().toISOString().slice(0,10)}.xlsx\`);
+            XLSX.writeFile(libro, `Sobres_Procesados_${new Date().toISOString().slice(0,10)}.xlsx`);
             log('Excel generado y descargado con éxito.', 'success');
         });
     </script>
