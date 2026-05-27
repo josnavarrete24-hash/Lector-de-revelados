@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extractor Automatizado de Sobres - Analista Pro</title>
+    <title>Extractor Automatizado de Sobres - Pro Automation v2</title>
     <!-- Tailwind CSS para un diseño limpio y profesional -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <!-- Biblioteca para generar archivos Excel reales -->
@@ -15,7 +15,7 @@
         <!-- Header -->
         <header class="mb-8 border-b border-slate-200 pb-4">
             <h1 class="text-3xl font-bold text-slate-900">Automatización: Recepción de Fotos a Excel</h1>
-            <p class="text-sm text-slate-500 mt-1">Analista Programador Automation Engine v1.0 (Powered by Gemini AI)</p>
+            <p class="text-sm text-slate-500 mt-1">Analista Programador Automation Engine v2.0 (Anti-Block & Auto-Retry Pro)</p>
         </header>
 
         <!-- Configuración y Carga -->
@@ -23,7 +23,7 @@
             <!-- Columna API Key -->
             <div class="bg-white p-5 rounded-xl shadow-xs border border-slate-200">
                 <label class="block text-sm font-semibold text-slate-700 mb-2">1. Configuración de API</label>
-                <input type="password" id="apiKey" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Introduce tu API Key de Gemini">
+                <input type="password" id="apiKey" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Introduce tu Gemini API Key...">
                 <p class="text-xs text-slate-400 mt-2">Tu key se maneja de forma local y segura en el cliente.</p>
             </div>
 
@@ -75,7 +75,7 @@
         </div>
 
         <!-- Log / Estado del Proceso -->
-        <div id="logConsole" class="bg-slate-900 text-emerald-400 p-4 rounded-xl font-mono text-xs hidden shadow-inner max-h-48 overflow-y-auto">
+        <div id="logConsole" class="bg-slate-900 text-emerald-400 p-4 rounded-xl font-mono text-xs hidden shadow-inner max-h-64 overflow-y-auto">
             <!-- Logs de sistema -->
         </div>
     </div>
@@ -98,15 +98,22 @@
             btnProcesar.disabled = fileInput.files.length === 0;
         });
 
-        // Logger profesional
+        // Logger profesional en consola de pantalla
         function log(mensaje, tipo = 'info') {
             logConsole.classList.remove('hidden');
-            const color = tipo === 'error' ? 'text-red-400' : (tipo === 'success' ? 'text-cyan-400' : 'text-emerald-400');
+            let color = 'text-emerald-400';
+            if (tipo === 'error') color = 'text-red-400';
+            if (tipo === 'success') color = 'text-cyan-400';
+            if (tipo === 'warning') color = 'text-amber-400';
+            
             logConsole.innerHTML += `<div class="${color}">[${new Date().toLocaleTimeString()}] ${mensaje}</div>`;
             logConsole.scrollTop = logConsole.scrollHeight;
         }
 
-        // --- PIPELINE DE INTELIGENCIA ARTIFICIAL (GEMINI) ---
+        // Función auxiliar para esperar N milisegundos
+        const esperar = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        // --- PIPELINE DE INTELIGENCIA ARTIFICIAL CON TOLERANCIA A ERRORES ---
         btnProcesar.addEventListener('click', async () => {
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) {
@@ -115,7 +122,7 @@
             }
 
             const files = fileInput.files;
-            datosDataset = []; // Reset
+            datosDataset = []; 
             tbodyDatos.innerHTML = '';
             panelResultados.classList.remove('hidden');
             
@@ -124,27 +131,55 @@
 
             for (let i = 0; i < files.length; i++) {
                 contadorProgreso.innerText = `${i + 1}/${files.length} Procesando...`;
-                try {
-                    log(`Procesando archivo: ${files[i].name}...`);
-                    const base64Data = await convertToBase64(files[i]);
-                    const cleanBase64 = base64Data.split(',')[1];
-                    const mimeType = files[i].type;
+                const archivoActual = files[i];
+                log(`Procesando archivo ${i + 1} de ${files.length}: ${archivoActual.name}...`);
+                
+                let procesadoConExito = false;
+                let intento = 1;
+                let datosEstructurados = null;
 
-                    const resultadoIa = await consultarGemini(cleanBase64, mimeType, apiKey);
-                    const datosEstructurados = JSON.parse(resultadoIa);
-                    
+                // CONVERSIÓN EN BASE64
+                const base64Data = await convertToBase64(archivoActual);
+                const cleanBase64 = base64Data.split(',')[1];
+                const mimeType = archivoActual.type;
+
+                // BUCLE DE REINTENTO EN CASO DE ERROR (Hasta que responda correctamente)
+                while (!procesadoConExito) {
+                    try {
+                        if (intento > 1) {
+                            log(`[Reintento #${intento}] Volviendo a intentar lectura para ${archivoActual.name}...`, 'warning');
+                        }
+
+                        const resultadoIa = await consultarGemini(cleanBase64, mimeType, apiKey);
+                        datosEstructurados = JSON.parse(resultadoIa);
+                        
+                        procesadoConExito = true; // Si llegó aquí sin caer al catch, fue exitoso
+                    } catch (error) {
+                        log(`Error en archivo ${archivoActual.name} (Intento #${intento}): ${error.message}`, 'error');
+                        log(`Límite de cuota o red detectado. Esperando 10 segundos antes de reintentar de forma automática...`, 'warning');
+                        intento++;
+                        await esperar(10000); // Pausa más larga de 10 segundos ante un fallo de cuota para dejar enfriar el canal
+                    }
+                }
+
+                // SI EL PROCESAMIENTO FUE EXITOSO, SE GUARDA Y SE MUESTRA
+                if (datosEstructurados) {
                     datosDataset.push(datosEstructurados);
                     agregarFilaTabla(datosEstructurados);
-                    log(`Archivo ${files[i].name} procesado con éxito.`, 'success');
-                } catch (error) {
-                    log(`Error procesando ${files[i].name}: ${error.message}`, 'error');
+                    log(`Archivo ${archivoActual.name} procesado con éxito completo.`, 'success');
+                }
+
+                // PAUSA SISTEMÁTICA Y OBLIGATORIA DE 4 SEGUNDOS ENTRE FOTOS (Previene que salte el error de cuota)
+                if (i < files.length - 1) {
+                    log(`Aplicando pausa sistemática de seguridad (4 segundos) para mantener lectura satisfactoria...`);
+                    await esperar(4000);
                 }
             }
 
             contadorProgreso.innerText = `${files.length}/${files.length} Finalizado`;
             contadorProgreso.className = "text-xs bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full font-medium";
             btnProcesar.disabled = false;
-            log('Procesamiento de lote completo.', 'success');
+            log('Procesamiento de todo el lote finalizado correctamente.', 'success');
         });
 
         // Conversor Asíncrono de Archivos a Base64
@@ -194,14 +229,14 @@
 
             if (!response.ok) {
                 const errData = await response.json();
-                throw new Error(errData.error?.message || 'Error desconocido en API');
+                throw new Error(errData.error?.message || 'Error en la respuesta de Google AI');
             }
 
             const resData = await response.json();
             return resData.candidates[0].content.parts[0].text;
         }
 
-        // --- INTERFAZ DE USUARIO Y EXPORTACIÓN ---
+        // --- INTERFAZ DE USUARIO ---
         function agregarFilaTabla(data) {
             const tr = document.createElement('tr');
             tr.className = "hover:bg-slate-50 transition-colors";
