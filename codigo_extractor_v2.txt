@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extractor Automatizado de Sobres - Pro Automation v2</title>
+    <!-- Tailwind CSS para un diseño limpio y profesional -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Biblioteca para generar archivos Excel reales -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+
+    <div class="max-w-6xl mx-auto p-6">
+        <!-- Header -->
+        <header class="mb-8 border-b border-slate-200 pb-4">
+            <h1 class="text-3xl font-bold text-slate-900">Automatización: Recepción de Fotos a Excel</h1>
+            <p class="text-sm text-slate-500 mt-1">Analista Programador Automation Engine v2.0 (Anti-Block & Auto-Retry Pro)</p>
+        </header>
+
+        <!-- Configuración y Carga -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Columna API Key -->
+            <div class="bg-white p-5 rounded-xl shadow-xs border border-slate-200">
+                <label class="block text-sm font-semibold text-slate-700 mb-2">1. Configuración de API</label>
+                <input type="password" id="apiKey" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" placeholder="Introduce tu Gemini API Key">
+                <p class="text-xs text-slate-400 mt-2">Tu key se maneja de forma local y segura en el cliente.</p>
+            </div>
+
+            <!-- Columna Carga de Archivos -->
+            <div class="bg-white p-5 rounded-xl shadow-xs border border-slate-200 md:col-span-2">
+                <label class="block text-sm font-semibold text-slate-700 mb-2">2. Carga de Imágenes (Soporta múltiples fotos)</label>
+                <div class="flex gap-4 items-center">
+                    <input type="file" id="fileInput" multiple accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                    <button id="btnProcesar" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2 rounded-lg text-sm transition-colors disabled:opacity-50" disabled>
+                        Procesar con IA
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Control de Resultados -->
+        <div class="bg-white rounded-xl shadow-xs border border-slate-200 p-6 mb-8 hidden" id="panelResultados">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-4">
+                    <h2 class="text-lg font-bold text-slate-900">Datos Extraídos</h2>
+                    <span id="contadorProgreso" class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-medium">0/0 Procesados</span>
+                </div>
+                <button id="btnExportar" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors flex items-center gap-2">
+                    Descargar Excel (.xlsx)
+                </button>
+            </div>
+
+            <!-- Tabla de datos -->
+            <div class="overflow-x-auto JSON-table-container">
+                <table class="w-full text-sm text-left text-slate-500" id="tablaDatos">
+                    <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+                        <tr>
+                            <th class="px-4 py-3">N° Sobre</th>
+                            <th class="px-4 py-3">N° Orden / ID</th>
+                            <th class="px-4 py-3">Cliente</th>
+                            <th class="px-4 py-3">Teléfono</th>
+                            <th class="px-4 py-3">Código Mini</th>
+                            <th class="px-4 py-3">Tienda</th>
+                            <th class="px-4 py-3">Formatos</th>
+                            <th class="px-4 py-3">Servicios</th>
+                            <th class="px-4 py-3">Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200" id="tbodyDatos">
+                        <!-- Filas inyectadas por JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Log / Estado del Proceso -->
+        <div id="logConsole" class="bg-slate-900 text-emerald-400 p-4 rounded-xl font-mono text-xs hidden shadow-inner max-h-64 overflow-y-auto">
+            <!-- Logs de sistema -->
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN E INICIALIZACIÓN ---
+        const fileInput = document.getElementById('fileInput');
+        const btnProcesar = document.getElementById('btnProcesar');
+        const btnExportar = document.getElementById('btnExportar');
+        const apiKeyInput = document.getElementById('apiKey');
+        const panelResultados = document.getElementById('panelResultados');
+        const tbodyDatos = document.getElementById('tbodyDatos');
+        const logConsole = document.getElementById('logConsole');
+        const contadorProgreso = document.getElementById('contadorProgreso');
+
+        let datosDataset = []; // Almacén de objetos extraídos
+
+        // Habilitar botón si hay archivos
+        fileInput.addEventListener('change', () => {
+            btnProcesar.disabled = fileInput.files.length === 0;
+        });
+
+        // Logger profesional en consola de pantalla
+        function log(mensaje, tipo = 'info') {
+            logConsole.classList.remove('hidden');
+            let color = 'text-emerald-400';
+            if (tipo === 'error') color = 'text-red-400';
+            if (tipo === 'success') color = 'text-cyan-400';
+            if (tipo === 'warning') color = 'text-amber-400';
+            
+            logConsole.innerHTML += `<div class="${color}">[${new Date().toLocaleTimeString()}] ${mensaje}</div>`;
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        // Función auxiliar para esperar N milisegundos
+        const esperar = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        // --- PIPELINE DE INTELIGENCIA ARTIFICIAL CON TOLERANCIA A ERRORES ---
+        btnProcesar.addEventListener('click', async () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                alert('Por favor, introduce una API Key válida de Gemini.');
+                return;
+            }
+
+            const files = fileInput.files;
+            datosDataset = []; 
+            tbodyDatos.innerHTML = '';
+            panelResultados.classList.remove('hidden');
+            
+            log(`Iniciando procesamiento por lotes para ${files.length} archivo(s)...`);
+            btnProcesar.disabled = true;
+
+            for (let i = 0; i < files.length; i++) {
+                contadorProgreso.innerText = `${i + 1}/${files.length} Procesando...`;
+                const archivoActual = files[i];
+                log(`Procesando archivo ${i + 1} de ${files.length}: ${archivoActual.name}...`);
+                
+                let procesadoConExito = false;
+                let intento = 1;
+                let datosEstructurados = null;
+
+                // CONVERSIÓN EN BASE64
+                const base64Data = await convertToBase64(archivoActual);
+                const cleanBase64 = base64Data.split(',')[1];
+                const mimeType = archivoActual.type;
+
+                // BUCLE DE REINTENTO EN CASO DE ERROR (Hasta que responda correctamente)
+                while (!procesadoConExito) {
+                    try {
+                        if (intento > 1) {
+                            log(`[Reintento #${intento}] Volviendo a intentar lectura para ${archivoActual.name}...`, 'warning');
+                        }
+
+                        const resultadoIa = await consultarGemini(cleanBase64, mimeType, apiKey);
+                        datosEstructurados = JSON.parse(resultadoIa);
+                        
+                        procesadoConExito = true; // Si llegó aquí sin caer al catch, fue exitoso
+                    } catch (error) {
+                        log(`Error en archivo ${archivoActual.name} (Intento #${intento}): ${error.message}`, 'error');
+                        log(`Límite de cuota o red detectado. Esperando 10 segundos antes de reintentar de forma automática...`, 'warning');
+                        intento++;
+                        await esperar(10000); // Pausa más larga de 10 segundos ante un fallo de cuota para dejar enfriar el canal
+                    }
+                }
+
+                // SI EL PROCESAMIENTO FUE EXITOSO, SE GUARDA Y SE MUESTRA
+                if (datosEstructurados) {
+                    datosDataset.push(datosEstructurados);
+                    agregarFilaTabla(datosEstructurados);
+                    log(`Archivo ${archivoActual.name} procesado con éxito completo.`, 'success');
+                }
+
+                // PAUSA SISTEMÁTICA Y OBLIGATORIA DE 4 SEGUNDOS ENTRE FOTOS (Previene que salte el error de cuota)
+                if (i < files.length - 1) {
+                    log(`Aplicando pausa sistemática de seguridad (4 segundos) para mantener lectura satisfactoria...`);
+                    await esperar(4000);
+                }
+            }
+
+            contadorProgreso.innerText = `${files.length}/${files.length} Finalizado`;
+            contadorProgreso.className = "text-xs bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full font-medium";
+            btnProcesar.disabled = false;
+            log('Procesamiento de todo el lote finalizado correctamente.', 'success');
+        });
+
+        // Conversor Asíncrono de Archivos a Base64
+        function convertToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        // --- LLAMADA ESTRUCTURADA A GEMINI 2.5 FLASH ---
+        async function consultarGemini(base64Image, mimeType, apiKey) {
+            const prompt = `Analiza detalladamente esta foto de un sobre de revelado fotográfico Fujifilm (Mi Foto Jumbo). Extrae rigurosamente la información manuscrita e impresa.
+            Devuelve EXCLUSIVAMENTE un objeto JSON válido (sin markdown, sin bloques de código \`\`\`, solo texto plano con la estructura JSON) con los siguientes campos:
+            {
+                "no_sobre": "Texto o número en 'nº de sobre'",
+                "no_orden": "Texto o número manuscrito en 'nº de orden / ID' (ej: '#642194')",
+                "cliente": "Nombre completo manuscrito en 'Nombre cliente'",
+                "telefono": "Número en 'Teléfono'",
+                "codigo_mini": "Número pequeño impreso en la etiqueta pegada (ej: '6246')",
+                "tienda": "Nombre impreso o cuño de la sucursal en 'Nombre tienda' (ej: 'Mi Foto Jumbo Alto Las Condes')",
+                "formatos": "Formatos marcados con X o números (ej: 'Otro: X')",
+                "servicios": "Servicios marcados como Impresión con cantidad, Digital, Traspaso DVD o Pendrive (ej: 'Impresión: 36')",
+                "observaciones": "Texto manuscrito en la sección de 'Observaciones' al final"
+            }
+            Si algún dato no es visible o está vacío, pon una cadena de texto vacía. Sé exacto con la transcripción.`;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\${apiKey}`;
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inlineData: { mimeType: mimeType, data: base64Image } }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json"
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error?.message || 'Error en la respuesta de Google AI');
+            }
+
+            const resData = await response.json();
+            return resData.candidates[0].content.parts[0].text;
+        }
+
+        // --- INTERFAZ DE USUARIO ---
+        function agregarFilaTabla(data) {
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-slate-50 transition-colors";
+            tr.innerHTML = `
+                <td class="px-4 py-3 font-medium text-slate-900">\${data.no_sobre || ''}</td>
+                <td class="px-4 py-3 font-mono text-blue-600">\${data.no_orden || ''}</td>
+                <td class="px-4 py-3">\${data.cliente || ''}</td>
+                <td class="px-4 py-3">\${data.telefono || ''}</td>
+                <td class="px-4 py-3 text-xs bg-slate-100 text-center font-bold rounded-sm">\${data.codigo_mini || ''}</td>
+                <td class="px-4 py-3">\${data.tienda || ''}</td>
+                <td class="px-4 py-3">\${data.formatos || ''}</td>
+                <td class="px-4 py-3">\${data.servicios || ''}</td>
+                <td class="px-4 py-3 italic">\${data.observaciones || ''}</td>
+            `;
+            tbodyDatos.appendChild(tr);
+        }
+
+        // Conversión y descarga a Excel utilizando SheetJS
+        btnExportar.addEventListener('click', () => {
+            if (datosDataset.length === 0) return;
+
+            const filasExcel = datosDataset.map(item => ({
+                'N° Sobre': item.no_sobre,
+                'N° Orden / ID': item.no_orden,
+                'Cliente': item.cliente,
+                'Teléfono': item.telefono,
+                'Código Mini': item.codigo_mini,
+                'Tienda': item.tienda,
+                'Formatos Seleccionados': item.formatos,
+                'Servicios / Cantidad': item.servicios,
+                'Observaciones': item.observaciones
+            }));
+
+            const hoja = XLSX.utils.json_to_sheet(filasExcel);
+            const libro = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(libro, hoja, "Datos Sobres");
+
+            XLSX.writeFile(libro, \`Sobres_Procesados_\${new Date().toISOString().slice(0,10)}.xlsx\`);
+            log('Excel generado y descargado con éxito.', 'success');
+        });
+    </script>
+</body>
+</html>
